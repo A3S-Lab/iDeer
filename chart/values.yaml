@@ -1,0 +1,87 @@
+# Built-in deep-research agent (Python / iDeer) — long-running Deployment.
+
+replicaCount: 1
+
+image:
+  # 仓库 path（不带 host）。Pod 视角的真实 registry host 由 syncer 读取
+  # BUILTIN_IMAGE_PULL_REGISTRY 注入到 helm_marketplace_charts.values_yaml
+  # 的 override 里，安装对话框会自动展示。
+  repository: a3s/deep-research-py
+  tag: "0.2.0"
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Existing Kubernetes Secret 提供 LLM / SMTP / RapidAPI 凭据，例如：
+#   API_KEY、SMTP_PASSWORD、X_RAPIDAPI_KEY
+credentialsSecretName: agent-llm-credentials
+
+# Shuan OS LLM 配置注入入口（同 NestJS agent 约定）。Syncer 会把当前默认
+# LLM 写成 extraEnv 里的 A3S_LLM_* 系列；deployment.yaml 再用 $(VAR) 语法
+# 别名到 Python 应用真正读取的 PROVIDER / MODEL_NAME / BASE_URL / API_KEY。
+os:
+  apiBaseUrl: ""
+  tokenSecretName: ""
+
+extraEnvFromSecrets: []
+extraEnv: []
+# Syncer 注入示例（自动生成，无需手填）：
+# - name: A3S_LLM_PROVIDER
+#   value: anthropic
+# - name: A3S_LLM_MODEL_ID
+#   value: claude-opus-4-7
+# - name: A3S_LLM_BASE_URL
+#   value: https://api.anthropic.com
+# - name: A3S_LLM_API_KEY
+#   value: sk-...
+
+# 持久化 history / users / profiles，避免 Pod 重启丢失日志和用户画像。
+persistence:
+  enabled: false
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 5Gi
+  # 不启用持久化时挂载 emptyDir，至少保证容器内可写。
+  mountPath: /app/data
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8090
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: deep-research.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 20
+    periodSeconds: 30
+  readiness:
+    path: /health
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
+serviceAccount:
+  create: true
+  name: ""
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

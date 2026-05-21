@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "deep-research.fullname" . }}
+  labels:
+    {{- include "deep-research.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "deep-research.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "deep-research.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "deep-research.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: agent
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort }}
+              protocol: TCP
+          env:
+            - name: PORT
+              value: {{ .Values.service.targetPort | quote }}
+            {{- if .Values.os.apiBaseUrl }}
+            - name: A3S_OS_API_BASE_URL
+              value: {{ .Values.os.apiBaseUrl | quote }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            # Alias Shuan OS-injected A3S_LLM_* → the Python app's expected
+            # PROVIDER / MODEL_NAME / BASE_URL / API_KEY env names. K8s
+            # resolves $(VAR) substitution against env vars declared above
+            # in this list, so this only resolves when extraEnv (set by the
+            # syncer from the configured default LLM) is non-empty.
+            - name: PROVIDER
+              value: "$(A3S_LLM_PROVIDER)"
+            - name: MODEL_NAME
+              value: "$(A3S_LLM_MODEL_ID)"
+            - name: BASE_URL
+              value: "$(A3S_LLM_BASE_URL)"
+            - name: API_KEY
+              value: "$(A3S_LLM_API_KEY)"
+          envFrom:
+            {{- if .Values.credentialsSecretName }}
+            - secretRef:
+                name: {{ .Values.credentialsSecretName }}
+                optional: true
+            {{- end }}
+            {{- if .Values.os.tokenSecretName }}
+            - secretRef:
+                name: {{ .Values.os.tokenSecretName }}
+                optional: true
+            {{- end }}
+            {{- range .Values.extraEnvFromSecrets }}
+            - secretRef:
+                name: {{ . }}
+                optional: true
+            {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.persistence.mountPath }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "deep-research.fullname" . }}-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- if .Values.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "deep-research.fullname" . }}-data
+  labels:
+    {{- include "deep-research.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
+  {{- if .Values.persistence.storageClass }}
+  storageClassName: {{ .Values.persistence.storageClass }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,17 @@
+{
+  "name": "@a3s-lab/agent-deep-research",
+  "version": "0.1.4",
+  "private": true,
+  "description": "书安OS 内置深度研究智能体（NestJS API + React SPA）",
+  "scripts": {
+    "build": "pnpm -r build",
+    "build:web": "pnpm --filter ./web build",
+    "build:server": "pnpm --filter ./server build",
+    "dev:web": "pnpm --filter ./web dev",
+    "dev:server": "pnpm --filter ./server start:dev"
+  },
+  "packageManager": "pnpm@10.0.0",
+  "engines": {
+    "node": ">=20"
+  }
+}

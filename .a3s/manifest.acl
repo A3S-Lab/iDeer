@@ -1,0 +1,75 @@
+# 深度研究智能体 (Python / iDeer) —— 书安OS 内置长驻服务
+# 单容器：FastAPI + Uvicorn 同时承载 REST API 和 WebSocket 实时日志。
+# 多信息源（arXiv / Semantic Scholar / HuggingFace / GitHub / PubMed / RSS / X）
+# 聚合并按个性化兴趣排序，生成日报与研究 idea。
+# 镜像由 书安OS 内置 registry 承载。
+
+schema = "builtin-asset/v1"
+
+asset "deep-research" {
+  category    = "agent"
+  ownerType   = "organization"
+  ownerId     = "builtin-agent"
+  visibility  = "private"
+  description = "多源科研信息聚合智能体：抓取 arXiv / S2 / HF / GitHub / RSS / X，按用户画像打分、生成日报与研究想法。基于 FastAPI + WebSocket。"
+  homepage    = "https://github.com/LiYu0524/iDeer"
+
+  metadata = {
+    builtin     = true
+    builtBy     = "ideer-upstream"
+    displayName = "深度研究"
+    tags        = ["research", "paper", "recommender", "longrunning", "python", "builtin"]
+
+    deployment = {
+      chartPath = "chart"
+      kind      = "deployment"
+    }
+
+    scaffold = {
+      source   = "ideer"
+      template = "python-fastapi-research-agent"
+      sdk      = "python"
+    }
+
+    agentConfig = {
+      systemPrompt = "你是深度研究助手。接到研究主题时，按 \"分解 → 多源检索 → 交叉验证 → 评分排序 → 总结\" 五步推进；每个结论都给出来源链接（论文/仓库/帖子）。回答用中文，但作者、机构、代码标识符和参考链接保持原文。"
+
+      model = {
+        provider    = "openai"
+        modelId     = "gpt-4o-mini"
+        temperature = 0.5
+        maxTokens   = 8192
+      }
+
+      tools = [
+        { id = "arxiv-fetcher",   name = "ArxivFetcher",          type = "builtin", enabled = true, description = "按分类/关键词从 arXiv 拉取最新论文" },
+        { id = "s2-fetcher",      name = "SemanticScholarFetcher", type = "builtin", enabled = true, description = "通过 Semantic Scholar Graph API 检索文献" },
+        { id = "hf-fetcher",      name = "HuggingFaceFetcher",    type = "builtin", enabled = true, description = "拉取 HuggingFace papers / models 列表" },
+        { id = "github-fetcher",  name = "GitHubFetcher",         type = "builtin", enabled = true, description = "按语言/时间窗抓取 GitHub trending" },
+        { id = "rss-fetcher",     name = "RSSFetcher",            type = "builtin", enabled = true, description = "聚合自定义 RSS 源" },
+        { id = "twitter-fetcher", name = "TwitterFetcher",        type = "builtin", enabled = false, description = "需 X RapidAPI key；按账号/关键词抓 X" },
+      ]
+
+      memory = {
+        enabled             = true
+        type                = "long_term"
+        persistenceStrategy = "filesystem"
+        maxTokens           = 65536
+      }
+
+      personality = {
+        role               = "深度研究助手"
+        traits             = ["系统化", "可追溯", "审慎"]
+        communicationStyle = "结构化，每个论断附引用"
+        expertise          = ["科研检索", "事实核验", "归纳总结", "跨领域综述"]
+      }
+
+      maxIterations  = 30
+      timeout        = 900000
+      enableThinking = false
+      enableCaching  = true
+    }
+  }
+
+  source "git-local" {}
+}
